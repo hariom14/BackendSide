@@ -13,243 +13,294 @@ app.use(express.json());
 
 // Register user
 app.post("/register",async(req,res)=>{
-    const {firstName,lastName,email,password,DOB,role} = req.body
-    const hashedPwd = await bcrypt.hash(password,10)
-    if(hashedPwd){
-        const user = new User({
-            firstName,
-            lastName,
-            email,
-            password:hashedPwd,
-            DOB,
-            role
-        });
+    try{
+        const {firstName,lastName,email,password,DOB,role} = req.body
+        const hashedPwd = await bcrypt.hash(password,10)
+        if(hashedPwd){
+            const user = new User({
+                firstName,
+                lastName,
+                email,
+                password:hashedPwd,
+                DOB,
+                role
+            });
 
-        const resp = await user.save();
-        if(!resp){
-            return res.status(500).send({
-                msg:"Internal server error",
-                error:true
-            });
+            const resp = await user.save();
+            if(!resp){
+                return res.status(500).send({
+                    msg:"Internal server error",
+                    error:true
+                });
+            }
+            else{
+                return res.status(201).send({
+                    msg:"User created successfully",
+                    resp
+                });
+            }
         }
-        else{
-            return res.status(201).send({
-                msg:"User created successfully",
-                resp
-            });
+    }
+    catch (err){
+        if(err.keyPattern.email){
+            return res.status(400).send({
+                msg:"Email already exists",
+                error:true
+            })
         }
     }
 })
 
 // Login user
 app.post("/login",async(req,res)=>{
+    try{
 
-    const {email,password}= req.body;
-
-    const emailResp = await User.findOne({email})
-    if(!emailResp){
-        return res.status(404).send({
-            msg:"Email not found",
-            err:false
-        });
-    }
-    else{
-       const result = await bcrypt.compare(password,emailResp.password)
-       if(!result){
-            return res.status(400).send({
-                msg:"Password does not match",
-                error
-            })
+        const {email,password}= req.body;
+        const emailResp = await User.findOne({email})
+        if(!emailResp){
+            return res.status(404).send({
+                msg:"Email not found",
+                err:false
+            });
         }
         else{
-            const token = jwt.sign({
-                userId:emailResp._id,
-                userEmail:emailResp.email,
-                userRole:emailResp.role
-            },
-            "RANDOM-TOKEN-HARIOM",
-            {
-                expiresIn:"24h"
+           const result = await bcrypt.compare(password,emailResp.password)
+           if(!result){
+                return res.status(400).send({
+                    msg:"Password does not match",
+                    error
+                })
             }
-            );
-
-            res.status(200).send({
-                msg:"Login successful",
-                email:emailResp.email,
-                token
-            })
+            else{
+                const token = jwt.sign({
+                    userId:emailResp._id,
+                    userEmail:emailResp.email,
+                    userRole:emailResp.role
+                },
+                "RANDOM-TOKEN-HARIOM",
+                {
+                    expiresIn:"24h"
+                }
+                );
+    
+                res.status(200).send({
+                    msg:"Login successful",
+                    email:emailResp.email,
+                    token
+                })
+            }
         }
     }
-
+    catch (err){
+            return res.status(400).send({
+                msg:err,
+                error:true
+            })
+    }
 })
 
 // Get Blogs 
 app.get("/get-blogs",auth,async(req,res)=>{
-    const { userId,userEmail,userRole}=req.user;
-    let filter = {};
-    if(req.query.author){
-        filter.author=req.query.author
-    }
-    if(req.query.category){
-        filter.category=req.query.category
-    }
-    if(userRole==="ADMIN"){
-        const blogs = await Blog.find(filter)
-        if(blogs && blogs.length){
-            return res.status(200).send({
-                msg:"Blogs",
-                blogs
-            })
+    try{
+        const { userId,userEmail,userRole}=req.user;
+        let filter = {};
+        if(req.query.author){
+            filter.author=req.query.author
+        }
+        if(req.query.category){
+            filter.category=req.query.category
+        }
+        if(userRole==="ADMIN"){
+            const blogs = await Blog.find(filter);
+            if(blogs && blogs.length){
+                return res.status(200).send({
+                    msg:"Blogs",
+                    blogs
+                })
+            }
+            else{
+                return res.status(400).send({
+                    msg:"No blogs found",
+                    error:false
+                })
+            }
         }
         else{
-            return res.status(400).send({
-                msg:"No blogs found",
-                error:false
-            })
+            filter.userId=userId;
+            const result = await Blog.find(filter);
+            if(result && result.length){
+                return res.status(200).send({
+                    msg:"Blogs",
+                    result
+                })
+            }
+            else{
+               return res.status(400).send({
+                    msg:"No blogs found",
+                    error:false
+                })
+            }
         }
     }
-    else{
-        filter.userId=userId;
-        const result = await Blog.find(filter);
-        if(result && result.length){
-            return res.status(200).send({
-                msg:"Blogs",
-                result
-            })
-        }
-        else{
-           return res.status(400).send({
-                msg:"No blogs found",
-                error:false
-            })
-        }
+    catch (err){
+        return res.status(400).send({
+            msg:err,
+            error:true
+        })
     }
-
 })
 
 // Create Blog
 app.post("/create-blog",auth,async(req,res)=>{
-    const {userId,userEmail,userRole} = req.user;
-    const {title,description,publishedDate,modifyDate,status,author}=req.body;
-
-    const blog = new Blog({
-        userId,
-        title,
-        description,
-        publishedDate,
-        modifyDate,
-        status,
-        author
-    })
-
-    const resp = await blog.save();
-    if(resp){
-       return res.status(201).send({
-            msg:"Blog created successfully",
-            result
-        });
+    try{
+        const {userId,userEmail,userRole} = req.user;
+        const {title,description,publishedDate,modifyDate,status,author}=req.body;
+    
+        const blog = new Blog({
+            userId,
+            title,
+            description,
+            publishedDate,
+            modifyDate,
+            status,
+            author
+        })
+    
+        const resp = await blog.save();
+        if(resp){
+           return res.status(201).send({
+                msg:"Blog created successfully",
+                resp
+            });
+        }
+        else{
+            return res.status(500).send({
+                msg:"Internal server error",
+                error:true
+            });
+        }
     }
-    else{
-        return res.status(500).send({
-            msg:"Internal server error",
+    catch (err){
+        return res.status(400).send({
+            msg:err,
             error:true
-        });
+        })
     }
 })
 
 // Update Blog
 app.put("/update-blog/:blogId",auth,async (req,res)=>{
-    const {blogId}=req.params;
-    const {userId,userEmail,userRole}=req.user;
-    const {title,description,modifyDate,status,author}=req.body;
-
-
-    const blog = await Blog.findOne({_id:mongoose.Types.ObjectId(blogId)})
-    if(!blog){
-        return res.status(404).send({
-            msg:"Blog not found",
-            error:false
-        })
-    }
-    else{
-        if(userRole ==="ADMIN"){
-            const resp = await Blog.updateOne({_id:mongoose.Types.ObjectId(blogId)},{title,description,modifyDate,status,author})
-            if(result.acknowledged){
-                return res.status(200).send({
-                    msg:"Blog updated successfully",
-                    error:false
-                }); 
-            }
-            else{
-                return res.status(200).send({
-                    msg:"Internal server error",
-                    error:true
-                }); 
-            } 
+    try{
+        const {blogId}=req.params;
+        const {userId,userEmail,userRole}=req.user;
+        const {title,description,modifyDate,status,author}=req.body;
+        const blog = await Blog.findOne({_id:mongoose.Types.ObjectId(blogId)})
+        if(!blog){
+            return res.status(404).send({
+                msg:"Blog not found",
+                error:false
+            })
         }
         else{
-            const result = await Blog.updateOne({_id:mongoose.Types.ObjectId(blogId),userId},{title,description,modifyDate,status,author})
-            if(result.acknowledged){
-                return res.status(200).send({
-                    msg:"Blog updated successfully",
-                    error:false
-                }); 
+            if(userRole ==="ADMIN"){
+                const resp = await Blog.updateOne({_id:mongoose.Types.ObjectId(blogId)},{title,description,modifyDate,status,author})
+                if(resp.modifiedCount){
+                    return res.status(200).send({
+                        msg:"Blog updated successfully",
+                        error:false
+                    }); 
+                }
+                else{
+                    return res.status(400).send({
+                        msg:"Please update some fields",
+                        error:true
+                    }); 
+                } 
             }
             else{
-                return res.status(500).send({
-                    msg:"Internal server error",
-                    error:true
-                });
-            }  
+                const result = await Blog.updateOne({_id:mongoose.Types.ObjectId(blogId),userId},{title,description,modifyDate,status,author});
+                if(result.modifiedCount){
+                    return res.status(200).send({
+                        msg:"Blog updated successfully",
+                        error:false
+                    }); 
+                }
+                else{
+                    if(result.matchedCount){
+                        return res.status(400).send({
+                            msg:"Please update some fields",
+                            error:true
+                        }); 
+                    }
+                    else{
+                        return res.status(401).send({
+                            msg:"Access denied",
+                            error:true
+                        }); 
+                    }
+                }  
+            }
         }
+    }
+    catch (err){
+        return res.status(400).send({
+            msg:err,
+            error:true
+        })
     }
 })
 
 // Delete Blog
 app.delete("/delete-blog/:blogId",auth,async(req,res)=>{
-    const {blogId}=req.params;
-    const {userId,userEmail,userRole}=req.user;
-    const {title,description,modifyDate,status,author}=req.body;
-
-
-    const blog = await Blog.findOne({_id:mongoose.Types.ObjectId(blogId)})
-    if(!blog){
-        return res.status(404).send({
-                        msg:"Blog not found",
-                        error:false
-                    })
-    }
-    else{
-        if(userRole ==="ADMIN"){
-            const resp = await Blog.deleteOne({_id:mongoose.Types.ObjectId(blogId)})
-            if(resp.acknowledged){
-                return res.status(200).send({
-                    msg:"Blog deleted successfully",
-                    error:false
-                });  
-            }
-            else{
-                res.status(500).send({
-                    msg:"Internal server error",
-                    error:true
-                });
-            }
+    try{
+        const {blogId}=req.params;
+        const {userId,userEmail,userRole}=req.user;
+        
+        const blog = await Blog.findOne({_id:mongoose.Types.ObjectId(blogId)})
+        if(!blog){
+            return res.status(404).send({
+                msg:"Blog not found",
+                error:false
+            })
         }
         else{
-           const response = await Blog.deleteOne({_id:mongoose.Types.ObjectId(blogId),userId})
-           if(response.acknowledged){
-                return res.status(200).send({
-                    msg:"Blog deleted successfully",
-                    error:false
-                });  
+            if(userRole ==="ADMIN"){
+                const resp = await Blog.deleteOne({_id:mongoose.Types.ObjectId(blogId)})
+                if(resp.deletedCount){
+                    return res.status(200).send({
+                        msg:"Blog deleted successfully",
+                        error:false
+                    });  
+                }
+                else{
+                    res.status(500).send({
+                        msg:"Internal server error",
+                        error:true
+                    });
+                }
             }
             else{
-                res.status(500).send({
-                    msg:"Internal server error",
-                    error:true
-                });
+               const response = await Blog.deleteOne({_id:mongoose.Types.ObjectId(blogId),userId})
+               if(response.deletedCount){
+                    return res.status(200).send({
+                        msg:"Blog deleted successfully",
+                        error:false
+                    });  
+                }
+                else{
+                    res.status(401).send({
+                        msg:"Access denied",
+                        error:true
+                    });
+                }
             }
         }
+    }
+    catch (err){
+        return res.status(400).send({
+            msg:err,
+            error:true
+        })
     }
 })
 
