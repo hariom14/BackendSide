@@ -35,7 +35,7 @@ app.post("/register",async(req,res)=>{
         else{
             return res.status(201).send({
                 msg:"User created successfully",
-                result
+                resp
             });
         }
     }
